@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>افزونه رمزنگاری ← QR</title>
+  <style>
+    body{font-family:system-ui,IRANSans,Segoe UI,Roboto,sans-serif;background:#f7f8fb;color:#222;margin:0}
+    .wrap{max-width:960px;margin:24px auto;padding:20px;background:#fff;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.06)}
+    h1{margin:0 0 8px 0} .muted{color:#666;margin-top:0}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .card{border:1px solid #eee;border-radius:12px;padding:16px}
+    label{display:block;margin-top:8px;font-size:.95em;color:#555}
+    input,textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:10px}
+    textarea{min-height:120px}
+    button{padding:10px 14px;border:0;border-radius:10px;background:#111;color:#fff;cursor:pointer}
+    button.secondary{background:#eaeaea;color:#222}
+    .row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+    .qrbox{display:flex;align-items:center;justify-content:center;border:1px dashed #ddd;border-radius:12px;min-height:240px;background:#fafafa}
+    .out{word-break:break-all;font-family:ui-monospace,Consolas,monospace;background:#fafafa;border:1px solid #eee;border-radius:10px;padding:10px}
+    .hint{font-size:.9em;color:#777}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>رمزنگاری متن و تولید QR اختصاصی</h1>
+    <p class="muted">این دمو، متن خام (مثلاً بارکد/شناسه محصول) را با <b>AES‑GCM</b> رمز می‌کند و توکن را به QR تبدیل می‌کند. فقط نرم‌افزار شما که کلید/عبارت را دارد می‌تواند رمزگشایی کند.</p>
+
+    <div class="grid">
+      <div class="card">
+        <h3>۱) تولید QR</h3>
+        <label>متن خام (مثلاً بارکد)</label>
+        <textarea id="plain"></textarea>
+        <div class="row">
+          <div style="flex:1">
+            <label>عبارت محرمانه (Passphrase)</label>
+            <input id="pass" type="password" placeholder="یک عبارت قوی انتخاب کن"/>
+          </div>
+          <div style="flex:1">
+            <label>شناسه اپ (App ID) برای قفل‌کردن QR به نرم‌افزار شما</label>
+            <input id="appid" placeholder="مثلاً cafe.example/app"/>
+          </div>
+        </div>
+        <div class="row">
+          <button id="encBtn">رمزنگاری و ساخت QR</button>
+          <button id="copyBtn" class="secondary">کپی توکن</button>
+        </div>
+        <label>توکن خروجی</label>
+        <div id="token" class="out"></div>
+      </div>
+
+      <div class="card">
+        <h3>۲) پیش‌نمایش QR</h3>
+        <div id="qr" class="qrbox"></div>
+        <p class="hint">برای چاپ یا ذخیره، روی QR راست‌کلیک کن.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>۳) تست رمزگشایی (سمت کلاینت)</h3>
+      <div class="row">
+        <input id="tokenIn" placeholder="توکن را اینجا بچسبان (QRX1.…)"/>
+        <input id="pass2" type="password" placeholder="عبارت محرمانه"/>
+        <input id="appid2" placeholder="App ID (باید مطابق باشد)"/>
+        <button id="decBtn">رمزگشایی</button>
+      </div>
+      <label>متن رمزگشایی‌شده</label>
+      <div id="plainOut" class="out"></div>
+    </div>
+
+    <p class="hint">نکته امنیتی: برای اینکه فقط نرم‌افزار شما توان رمزگشایی داشته باشد، عبارت محرمانه/کلید را فقط در <b>سمت سرور</b> نگه دارید و فرایند رمزگشایی را روی سرور انجام دهید، یا دست‌کم Passphrase را هرگز در کلاینت عمومی منتشر نکنید.</p>
+  </div>
+
+  <!-- QR rendering lib from CDN (MIT licensed) -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script type="module">
+    import { encryptToToken, decryptFromToken } from './qrcrypto.js';
+
+    const $ = sel => document.querySelector(sel);
+    const plain = $('#plain'), pass = $('#pass'), appid = $('#appid');
+    const tokenBox = $('#token'), qrBox = $('#qr');
+    const tokenIn = $('#tokenIn'), pass2 = $('#pass2'), appid2 = $('#appid2');
+    const plainOut = $('#plainOut');
+
+    $('#encBtn').addEventListener('click', async ()=>{
+      try{
+        if(!plain.value.trim()) return alert('متن خام را وارد کن');
+        if(!pass.value) return alert('عبارت محرمانه را وارد کن');
+        const token = await encryptToToken(plain.value, pass.value, appid.value||'');
+        tokenBox.textContent = token;
+        qrBox.innerHTML = '';
+        // Render QR
+        await QRCode.toCanvas(token, { errorCorrectionLevel:'M', margin:1, scale:6 })
+          .then(canvas => qrBox.appendChild(canvas));
+        tokenIn.value = token; // convenience
+      }catch(err){
+        alert('خطا در رمزنگاری: ' + err.message);
+      }
+    });
+
+    $('#copyBtn').addEventListener('click', async ()=>{
+      if(!tokenBox.textContent) return;
+      await navigator.clipboard.writeText(tokenBox.textContent);
+      alert('توکن کپی شد.');
+    });
+
+    $('#decBtn').addEventListener('click', async ()=>{
+      try{
+        if(!tokenIn.value.trim()) return alert('توکن را وارد کن');
+        if(!pass2.value) return alert('عبارت محرمانه را وارد کن');
+        const pt = await decryptFromToken(tokenIn.value, pass2.value, appid2.value||'');
+        plainOut.textContent = pt;
+      }catch(err){
+        plainOut.textContent = '❌ خطا: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
