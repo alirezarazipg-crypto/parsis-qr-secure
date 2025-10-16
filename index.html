@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Parsis QR Secure</title>
+  <style>
+    :root{--gold:#d4af37;--black:#111;--paper:#f7f6f2;--muted:#6b6b6b;--r:16px}
+    *{box-sizing:border-box} body{margin:0;font-family:IRANSans,system-ui,Segoe UI,Roboto,sans-serif;background:var(--paper);color:#222}
+    .nav{display:flex;align-items:center;gap:10px;padding:14px 20px;background:var(--black);color:#fff}
+    .logo{width:28px;height:28px;background:var(--gold);border-radius:6px}
+    .wrap{max-width:980px;margin:24px auto;padding:20px;background:#fff;border-radius:var(--r);box-shadow:0 10px 30px rgba(0,0,0,.06)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .card{border:1px solid #eee;border-radius:12px;padding:16px}
+    label{display:block;margin-top:8px;font-size:.95em;color:#555}
+    input,textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:10px}
+    textarea{min-height:120px}
+    button{padding:10px 14px;border:0;border-radius:10px;background:var(--black);color:#fff;cursor:pointer}
+    .secondary{background:#eee;color:#111}
+    .qrbox{display:flex;align-items:center;justify-content:center;border:1px dashed #ddd;border-radius:12px;min-height:240px;background:#fafafa}
+    .out{word-break:break-all;font-family:ui-monospace,Consolas,monospace;background:#fafafa;border:1px solid #eee;border-radius:10px;padding:10px}
+  </style>
+</head>
+<body>
+  <div class="nav"><div class="logo"></div><b>Parsis QR Secure</b></div>
+  <div class="wrap">
+    <h2>رمزنگاری سروری و QR دو سانتی</h2>
+    <div class="grid">
+      <div class="card">
+        <label>متن خام</label>
+        <textarea id="plain"></textarea>
+        <div style="margin-top:8px">
+          <button id="encBtn">تولید</button>
+          <button id="saveSvg" class="secondary">ذخیرهٔ SVG</button>
+        </div>
+        <label style="margin-top:8px">توکن</label>
+        <div id="token" class="out"></div>
+      </div>
+      <div class="card">
+        <h3>پیش‌نمایش (۲×۲ سانت)</h3>
+        <div id="qr" class="qrbox"></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>تست رمزگشایی</h3>
+      <input id="tokenIn" placeholder="توکن QRX1.…"/>
+      <button id="decBtn" style="margin-top:8px">رمزگشایی</button>
+      <label>متن رمزگشایی‌شده</label>
+      <div id="plainOut" class="out"></div>
+    </div>
+  </div>
+<script>
+const $ = s=>document.querySelector(s);
+let lastSvg=null;
+$('#encBtn').addEventListener('click', async()=>{
+  const plaintext=$('#plain').value.trim(); if(!plaintext) return alert('متن خام را وارد کنید');
+  const r=await fetch('/api/encode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plaintext})});
+  const data=await r.json(); if(data.error){alert('خطا: '+data.error);return;}
+  $('#token').textContent=data.token; $('#tokenIn').value=data.token; lastSvg=data.svg; $('#qr').innerHTML=data.svg;
+});
+$('#saveSvg').addEventListener('click',()=>{ if(!lastSvg) return; const blob=new Blob([lastSvg],{type:'image/svg+xml'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='parsis-qr-2cm.svg'; a.click(); URL.revokeObjectURL(url);});
+$('#decBtn').addEventListener('click', async()=>{
+  const token=$('#tokenIn').value.trim(); if(!token) return alert('توکن را وارد کنید');
+  const r=await fetch('/api/decode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
+  const data=await r.json(); $('#plainOut').textContent=data.error?('❌ '+data.error):data.plaintext;
+});
+</script>
+</body>
+</html>
